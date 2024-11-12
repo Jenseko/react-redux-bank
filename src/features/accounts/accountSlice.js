@@ -13,29 +13,60 @@ const accountSlice = createSlice({
   reducers: {
     deposit(state, action) {
       // mutate balance.state
-      state.balance = state.balance + action.payload;
+      state.balance += action.payload;
     },
+
     withdraw(state, action) {
       state.balance -= action.payload;
     },
-    requestLoan(state, action) {
-      if (state.loan > 0) return;
 
-      state.loan = action.payload.amount;
-      state.loanPurpose = action.payload.purpose;
-      state.balance = state.balance + action.payload.amount;
+    requestLoan: {
+      prepare(amount, purpose) {
+        return {
+          payload: { amount, purpose }
+        };
+      },
+
+      reducer(state, action) {
+        if (state.loan > 0) return;
+
+        state.loan = action.payload.amount;
+        state.loanPurpose = action.payload.purpose;
+        state.balance = state.balance + action.payload.amount;
+      }
     },
+
     payLoan(state, action) {
-      state.loan = 0;
-      state.loanPurpose = "";
       state.balance -= state.loan;
+      state.loanPurpose = "";
+      state.loan = 0;
+    },
+    convertingCurrency(state) {
+      state.isLoading = true;
     }
   }
 });
 
-console.log(accountSlice);
+// using thunks is also supported by RTK
+// !this is not the redux toolkit way!
+export const { withdraw, requestLoan, payLoan } = accountSlice.actions;
 
-export const { deposit, withdraw, requestLoan, payLoan } = accountSlice.actions;
+export function deposit(amount, currency) {
+  if (currency === "USD") return { type: "account/deposit", payload: amount };
+
+  return async function(dispatch, getState) {
+    dispatch({ type: "account/convertingCurrency" });
+
+    const res = await fetch(
+      `https://api.frankfurter.app/latest?amount=${amount}&from=${currency}&to=USD`
+    );
+    const data = await res.json();
+    const converted = data.rates.USD;
+    console.log(converted);
+
+    dispatch({ type: "account/deposit", payload: converted });
+  };
+}
 
 export default accountSlice.reducer;
 
